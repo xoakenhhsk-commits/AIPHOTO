@@ -1,10 +1,8 @@
-const express = require('express');
-const cors = require('cors');
-const multer = require('multer');
-const dotenv = require('dotenv');
-const { Client } = require('@gradio/client');
-
-dotenv.config();
+import express from 'express';
+import cors from 'cors';
+import multer from 'multer';
+import 'dotenv/config';
+import { Client } from '@gradio/client';
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -12,13 +10,11 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// Setup Multer for memory storage
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 /**
- * Phục hồi ảnh bằng Hugging Face Spaces (Hoàn toàn miễn phí)
- * Sử dụng mô hình GFPGAN nổi tiếng để làm nét khuôn mặt
+ * Phục hồi ảnh bằng Hugging Face Spaces (Sử dụng ESM để hỗ trợ thư viện mới nhất)
  */
 app.post('/api/process', upload.single('image'), async (req, res) => {
   try {
@@ -26,32 +22,30 @@ app.post('/api/process', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: 'No image uploaded' });
     }
 
-    console.log("--- Bắt đầu xử lý ảnh miễn phí qua Hugging Face ---");
+    console.log("--- Bắt đầu xử lý ảnh (ESM + Hugging Face) ---");
     
-    // Chuyển buffer ảnh thành Blob để gửi cho Gradio
+    // Tạo Blob từ buffer ảnh
     const blob = new Blob([req.file.buffer], { type: req.file.mimetype });
     
-    // Kết nối tới Hugging Face Space (Sử dụng tencentarc/GFPGAN)
-    // Đây là server cộng đồng chạy GFPGAN miễn phí
-    const client = await Client.connect("tencentarc/GFPGAN");
+    // Sử dụng Space CodeFormer (Thường ổn định và chất lượng cao hơn GFPGAN)
+    const client = await Client.connect("sczhou/CodeFormer");
     
-    console.log("Đã kết nối tới HF Space. Đang gửi ảnh...");
+    console.log("Kết nối Space thành công. Đang xử lý...");
 
-    // Gọi hàm predict của Space
-    // Đối với tencentarc/GFPGAN, tham số thường là: image, version, scale
+    // Gọi API của CodeFormer
+    // Tham số: [image, fidelity, has_face_restoration, has_upsampling]
     const result = await client.predict("/predict", [
-      blob, 	// Hình ảnh
-      "v1.4", 	// Version
-      2, 		// Scale (phóng to 2x)
+      blob, 	// image
+      0.5, 		// fidelity (0-1)
+      true, 	// face_restoration
+      true, 	// upsampling
     ]);
 
     console.log("Xử lý hoàn tất!");
 
-    // Kết quả trả về của Gradio thường là mảng các file
-    // result.data[0] là URL của ảnh đã được phục hồi
+    // Trích xuất URL ảnh kết quả
     const restoredUrl = result.data[0].url;
 
-    // Ảnh gốc để trả về frontend so sánh
     const base64Original = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
 
     res.json({ 
@@ -62,18 +56,18 @@ app.post('/api/process', upload.single('image'), async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Lỗi xử lý Hugging Face:", error);
+    console.error("Lỗi AI Hugging Face:", error);
     res.status(500).json({ 
-      error: "Hệ thống AI miễn phí đang bận hoặc gặp lỗi. Vui lòng thử lại sau vài giây.",
+      error: "Máy chủ AI đang bận hoặc quá tải. Vui lòng thử lại sau 10 giây.",
       details: error.message 
     });
   }
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', provider: 'huggingface' });
+  res.json({ status: 'ok', provider: 'huggingface', mode: 'esm' });
 });
 
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+  console.log(`Server running on port ${port} (ESM Mode)`);
 });
