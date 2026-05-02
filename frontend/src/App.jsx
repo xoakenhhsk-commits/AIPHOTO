@@ -225,6 +225,26 @@ function App() {
     setSliderPos(Math.min(Math.max(position, 0), 100));
   };
 
+  const handleDownload = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch(result);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `restored_${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading image:', error);
+      // Fallback
+      window.open(result, '_blank');
+    }
+  };
+
   const reset = () => {
     setFile(null);
     setPreview(null);
@@ -426,9 +446,9 @@ function App() {
                 )}
                 
                 {result && (
-                  <a href={result} download={`restored_${Date.now()}.png`} target="_blank" rel="noreferrer" className="btn-primary">
+                  <button onClick={handleDownload} className="btn-primary">
                     <Download size={20} /> {t.downloadBtn}
-                  </a>
+                  </button>
                 )}
               </div>
 
@@ -448,6 +468,7 @@ function App() {
                   src={result || preview} 
                   alt="Result" 
                   className="comparison-image" 
+                  draggable="false"
                 />
 
                 {/* Before Image */}
@@ -459,6 +480,7 @@ function App() {
                     src={preview} 
                     alt="Original" 
                     className="comparison-image" 
+                    draggable="false"
                   />
                   <span className="label label-before">{t.originalLabel}</span>
                 </div>
